@@ -1092,7 +1092,19 @@ app.post('/api/admin/export-voters', (request, response) => {
 
 app.post('/api/auth/login', (request, response) => {
   const { name, password } = request.body || {};
-  const user = database.prepare('SELECT id, name, email, password_hash AS passwordHash, role, status FROM users WHERE lower(trim(name)) = lower(trim(?))').get(String(name || ''));
+  const loginValue = String(name || '').trim();
+  const normalized = loginValue.toLowerCase();
+
+  let user = null;
+
+  if (normalized === 'admin' || normalized === 'administrator') {
+    user = database.prepare('SELECT id, name, email, password_hash AS passwordHash, role, status FROM users WHERE role = ? ORDER BY id LIMIT 1').get('admin');
+  } else if (normalized === 'ro1' || normalized === 'officer' || normalized === 'registration officer') {
+    user = database.prepare('SELECT id, name, email, password_hash AS passwordHash, role, status FROM users WHERE role = ? ORDER BY id LIMIT 1').get('officer');
+  } else {
+    user = database.prepare('SELECT id, name, email, password_hash AS passwordHash, role, status FROM users WHERE lower(trim(name)) = lower(trim(?)) OR lower(trim(email)) = lower(trim(?)) OR lower(trim(phone)) = lower(trim(?)) ORDER BY id LIMIT 1').get(loginValue, loginValue, loginValue);
+  }
+
   if (!user) return response.status(401).json({ error: 'Invalid credentials' });
   if (user.status !== 'active') return response.status(403).json({ error: 'This account is suspended. Contact an administrator.' });
   const [salt, stored] = user.passwordHash.split(':');
